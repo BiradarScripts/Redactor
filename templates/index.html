@@ -23,9 +23,18 @@
 
         body {
             font-family: 'DM Sans', sans-serif;
-            overflow: hidden;
             min-height: 100vh;
             background: var(--primary-dark);
+        }
+
+        /* Hero page - no scroll */
+        body.hero-page {
+            overflow: hidden;
+        }
+
+        /* Solid pages - scrollable */
+        body.solid-page {
+            overflow-y: auto;
         }
 
         /* Loading Screen */
@@ -665,7 +674,7 @@
         .hero-content > *:nth-child(4) { animation-delay: 0.4s; }
     </style>
 </head>
-<body>
+<body class="{% if view_mode == 'compare' or query is defined %}solid-page{% else %}hero-page{% endif %}">
 
 <!-- Loading Screen -->
 <div class="loading-screen" id="loadingScreen">
