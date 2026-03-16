@@ -5,3 +5,4 @@ requests
 presidio-analyzer
 presidio-anonymizer
 spacy
+python-multipart
