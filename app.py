@@ -1,7 +1,6 @@
 from fastapi import FastAPI, Request, Form
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
-from fastapi.staticfiles import StaticFiles
 import uvicorn
 import traceback
 import os
@@ -15,16 +14,15 @@ app = FastAPI()
 # ✅ Base directory (important for Render)
 BASE_DIR = os.path.dirname(os.path.abspath(__file__))
 
-# ✅ Templates & Static setup
+# ✅ Templates setup
 templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
-app.mount("/static", StaticFiles(directory=os.path.join(BASE_DIR, "static")), name="static")
 
-# ✅ Global variables (initialized later)
+# ✅ Global variables
 client = None
 masker = None
 
 
-# ✅ Startup event (prevents crash on deploy)
+# ✅ Startup initialization (prevents crash)
 @app.on_event("startup")
 async def startup_event():
     global client, masker
@@ -83,12 +81,10 @@ async def process_doc(request: Request, doc_id: int):
         if client is None or masker is None:
             raise Exception("Services not initialized")
 
-        # Fetch document
         raw_data = client.get_document(doc_id)
         original_text = raw_data.get('doc', 'Error fetching document')
         title = raw_data.get('title', 'Unknown Title')
 
-        # Mask data
         masked_text, analysis = masker.mask_victims_and_family(original_text)
 
         return templates.TemplateResponse("index.html", {
@@ -111,12 +107,12 @@ async def process_doc(request: Request, doc_id: int):
         })
 
 
-# ✅ Health check route (VERY IMPORTANT for Render debugging)
+# ✅ Health check route (optional but useful)
 @app.get("/health")
 async def health():
     return {"status": "ok"}
 
 
-# ✅ Local run (not used in Render, but safe)
+# ✅ Local run
 if __name__ == "__main__":
     uvicorn.run(app, host="0.0.0.0", port=8000)
