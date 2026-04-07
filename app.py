@@ -1,9 +1,11 @@
+from pathlib import Path
+
 from fastapi import FastAPI, Request, Form
+from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse
 import uvicorn
 import traceback
-import os
 
 # Import your modules
 from kanoon_client import KanoonClient
@@ -12,14 +14,24 @@ from masking_engine import SmartMasker
 app = FastAPI()
 
 # ✅ Base directory (important for Render)
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = Path(__file__).resolve().parent
+STATIC_DIR = BASE_DIR / "static"
 
 # ✅ Templates setup
-templates = Jinja2Templates(directory=os.path.join(BASE_DIR, "templates"))
+templates = Jinja2Templates(directory=str(BASE_DIR / "templates"))
+app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 
 # ✅ Global variables
 client = None
 masker = None
+
+
+def render_index(request: Request, **context):
+    return templates.TemplateResponse(
+        request=request,
+        name="index.html",
+        context={"request": request, **context},
+    )
 
 
 # ✅ Startup initialization (prevents crash)
@@ -43,7 +55,7 @@ async def startup_event():
 # ✅ Home route
 @app.get("/", response_class=HTMLResponse)
 async def home(request: Request):
-    return templates.TemplateResponse("index.html", {"request": request})
+    return render_index(request)
 
 
 # ✅ Search route
@@ -56,22 +68,13 @@ async def search(request: Request, query: str = Form(...)):
         results = client.search_documents(query)
         docs = results.get('docs', []) if results else []
 
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "docs": docs,
-            "query": query
-        })
+        return render_index(request, docs=docs, query=query)
 
     except Exception as e:
         print(f"❌ Search error: {e}")
         traceback.print_exc()
 
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "docs": [],
-            "query": query,
-            "error": str(e)
-        })
+        return render_index(request, docs=[], query=query, error=str(e))
 
 
 # ✅ Process document route
@@ -87,24 +90,21 @@ async def process_doc(request: Request, doc_id: int):
 
         masked_text, analysis = masker.mask_victims_and_family(original_text)
 
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "doc_id": doc_id,
-            "title": title,
-            "original_text": original_text,
-            "masked_text": masked_text,
-            "view_mode": "compare",
-            "analysis": analysis
-        })
+        return render_index(
+            request,
+            doc_id=doc_id,
+            title=title,
+            original_text=original_text,
+            masked_text=masked_text,
+            view_mode="compare",
+            analysis=analysis,
+        )
 
     except Exception as e:
         print(f"❌ Process error: {e}")
         traceback.print_exc()
 
-        return templates.TemplateResponse("index.html", {
-            "request": request,
-            "error": str(e)
-        })
+        return render_index(request, error=str(e))
 
 
 # ✅ Health check route (optional but useful)
