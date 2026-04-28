@@ -1,7 +1,5 @@
-# config.py
+import os
 
-# Your Indian Kanoon API Token
-API_TOKEN = "a9f8a8ad90dab02516404af082d5a11636f5e1a8"
-
-# Base URL for Indian Kanoon API
-BASE_URL = "https://api.indiankanoon.org"
+API_TOKEN = os.getenv("INDIAN_KANOON_API_TOKEN", "").strip()
+BASE_URL = os.getenv("INDIAN_KANOON_BASE_URL", "https://api.indiankanoon.org").rstrip("/")
+REQUEST_TIMEOUT = int(os.getenv("INDIAN_KANOON_TIMEOUT", "20"))

@@ -720,13 +720,13 @@
                     <div class="panel-header">
                         <h3>Original Document</h3>
                     </div>
-                    <div class="panel-content" id="original-content">{{ original_text | safe }}</div>
+                    <div class="panel-content" id="original-content">{{ original_text }}</div>
                 </div>
                 <div class="panel">
                     <div class="panel-header safe">
                         <h3>Safe/Masked Version</h3>
                     </div>
-                    <div class="panel-content" id="masked-content">{{ masked_text | safe }}</div>
+                    <div class="panel-content" id="masked-content">{% if masked_html is defined %}{{ masked_html | safe }}{% else %}{{ masked_text }}{% endif %}</div>
                 </div>
             </div>
         </div>
@@ -760,8 +760,8 @@
                         <div class="analysis-label">Total Masked</div>
                     </div>
                     <div class="analysis-card">
-                        <div class="analysis-number">{{ analysis.victim_family_count if analysis else 0 }}</div>
-                        <div class="analysis-label">Victims/Family</div>
+                        <div class="analysis-number">{{ analysis.protected_person_count if analysis else 0 }}</div>
+                        <div class="analysis-label">Protected People</div>
                     </div>
                     <div class="analysis-card">
                         <div class="analysis-number">{{ analysis.phone_count if analysis else 0 }}</div>
@@ -776,8 +776,20 @@
                         <div class="analysis-label">Locations</div>
                     </div>
                     <div class="analysis-card">
+                        <div class="analysis-number">{{ analysis.legal_entity_count if analysis else 0 }}</div>
+                        <div class="analysis-label">Legal Entities</div>
+                    </div>
+                    <div class="analysis-card">
+                        <div class="analysis-number">{{ analysis.statute_count if analysis else 0 }}</div>
+                        <div class="analysis-label">Statutes</div>
+                    </div>
+                    <div class="analysis-card">
+                        <div class="analysis-number">{{ analysis.provision_count if analysis else 0 }}</div>
+                        <div class="analysis-label">Provisions</div>
+                    </div>
+                    <div class="analysis-card">
                         <div class="analysis-number">{{ analysis.reduction_percentage if analysis else 0 }}%</div>
-                        <div class="analysis-label">Text Reduced</div>
+                        <div class="analysis-label">Length Change</div>
                     </div>
                 </div>
             </div>
@@ -838,12 +850,6 @@
                 }
             });
             
-            // Highlight masked portions
-            maskedContent.innerHTML = maskedContent.innerHTML
-                .replace(/\[VICTIM\/FAMILY[_\d]*\]/g, '<mark>[VICTIM/FAMILY]</mark>')
-                .replace(/\[PHONE\]/g, '<mark>[PHONE]</mark>')
-                .replace(/\[EMAIL\]/g, '<mark>[EMAIL]</mark>')
-                .replace(/\[LOC\]/g, '<mark>[LOC]</mark>');
         }
     </script>
 
@@ -865,8 +871,8 @@
             <div class="doc-list">
                 {% for doc in docs %}
                 <a href="/process/{{ doc.tid }}" class="doc-item">
-                    <div class="doc-title">{{ doc.title | safe }}</div>
-                    <div class="doc-headline">{{ doc.headline | safe }}</div>
+                    <div class="doc-title">{{ doc.title | striptags }}</div>
+                    <div class="doc-headline">{{ doc.headline | striptags }}</div>
                 </a>
                 {% endfor %}
             </div>

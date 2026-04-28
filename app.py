@@ -1,3 +1,5 @@
+import html
+import re
 from pathlib import Path
 
 from fastapi import FastAPI, Request, Form
@@ -25,6 +27,10 @@ app.mount("/static", StaticFiles(directory=str(STATIC_DIR)), name="static")
 client = None
 masker = None
 
+MASK_TOKEN_RE = re.compile(
+    r"(\[(?:PROTECTED_PERSON_\d+|VICTIM/FAMILY_\d+|PHONE|EMAIL|LOC|ID)\])"
+)
+
 
 def render_index(request: Request, **context):
     return templates.TemplateResponse(
@@ -34,21 +40,31 @@ def render_index(request: Request, **context):
     )
 
 
+def highlighted_masked_text(text: str) -> str:
+    escaped = html.escape(text or "")
+    return MASK_TOKEN_RE.sub(r"<mark>\1</mark>", escaped)
+
+
 # ✅ Startup initialization (prevents crash)
 @app.on_event("startup")
 async def startup_event():
     global client, masker
     try:
-        print("🚀 Starting initialization...")
+        print("Starting initialization...")
 
         client = KanoonClient()
-        print("✅ KanoonClient initialized")
-
-        masker = SmartMasker()
-        print("✅ SmartMasker initialized")
+        print("KanoonClient initialized")
 
     except Exception as e:
-        print("❌ Initialization failed:", e)
+        print("KanoonClient unavailable:", e)
+        traceback.print_exc()
+
+    try:
+        masker = SmartMasker()
+        print(f"SmartMasker initialized with model: {masker.legal_model_name}")
+
+    except Exception as e:
+        print("SmartMasker initialization failed:", e)
         traceback.print_exc()
 
 
@@ -96,6 +112,7 @@ async def process_doc(request: Request, doc_id: int):
             title=title,
             original_text=original_text,
             masked_text=masked_text,
+            masked_html=highlighted_masked_text(masked_text),
             view_mode="compare",
             analysis=analysis,
         )
@@ -110,7 +127,12 @@ async def process_doc(request: Request, doc_id: int):
 # ✅ Health check route (optional but useful)
 @app.get("/health")
 async def health():
-    return {"status": "ok"}
+    return {
+        "status": "ok",
+        "kanoon_client": client is not None,
+        "masker": masker is not None,
+        "legal_model": masker.legal_model_name if masker else None,
+    }
 
 
 # ✅ Local run

@@ -1,160 +1,83 @@
-# 🇮🇳 Indian Kanoon : Context-Aware PII Masker
+# Indian Kanoon Legal Privacy Redactor
 
-A sophisticated Python-based tool that interfaces with the **Indian Kanoon API** to fetch legal documents and intelligently masks sensitive information. 
+A FastAPI web app for searching Indian Kanoon judgments and producing a privacy-preserving version of the text.
 
-Unlike standard maskers that hide *everyone*, this tool uses **Context-Aware NLP** to specifically protect **Victims and their Families** while keeping Judges, Lawyers, and the Accused visible for legal context. It features a modern **Web Interface** for easy searching and side-by-side comparison.
+The masking engine is designed around Indian court judgment structure. It can use OpenNyAI/InLegalNER when a legal spaCy model is installed, and otherwise falls back to Presidio, spaCy, and legal-domain rules for provisions, statutes, precedents, and sensitive-person context.
 
----
+## What It Protects
 
-## 🚀 Features
+- Protected people mentioned in sensitive contexts, including victims, survivors, prosecutrix references, witnesses, complainants, informants, minors, and family members.
+- Repeated mentions of a protected name across the same judgment.
+- Phone numbers, email addresses, common Indian identity numbers where Presidio supports them, and locations.
 
-* **Context-Aware Protection**: Uses logic to distinguish between public figures (Judges, Lawyers) and vulnerable individuals (Victims, Family).
-    * *Masks:* "Sita (Victim)", "Raju (Son of...)" -> `[VICTIM/FAMILY]`
-    * *Keeps:* "Justice Sharma", "Advocate Mehta" -> Visible
-* **Smart Search UI**: A clean, browser-based interface to search the Indian Kanoon database.
-* **Side-by-Side Comparison**: Instantly view the original legal text next to the safe, masked version.
-* **Standard PII Redaction**: Automatically hides:
-    * `[PHONE]` - Mobile and landline numbers
-    * `[EMAIL]` - Email addresses
-    * `[LOC]` - Physical addresses
-* **Powered by**: FastAPI (Web), Microsoft Presidio (PII), and spaCy (NLP).
+## What It Preserves
 
----
+- Judges, lawyers, courts, statutes, provisions, precedents, and case numbers where a legal model or legal rules identify them.
+- General party names unless there is sensitive context linking them to a protected person category.
 
-## 🛠️ Prerequisites
+## Legal NER Basis
 
-1.  **Python 3.8+** installed on your system.
-2.  An active **Indian Kanoon API Token**.
-    * *Get one at [Indian Kanoon API](https://api.indiankanoon.org/).*
+This project incorporates the design lessons from "Named Entity Recognition in Indian Court Judgments" by Kalamkar et al. (NLLP 2022):
 
----
+- Indian judgments should be split into preamble and judgment body because party, judge, lawyer, court, and date mentions behave differently in each section.
+- Legal entities are more specific than generic NER labels: `COURT`, `PETITIONER`, `RESPONDENT`, `JUDGE`, `LAWYER`, `DATE`, `ORG`, `GPE`, `STATUTE`, `PROVISION`, `PRECEDENT`, `CASE_NUMBER`, `WITNESS`, and `OTHER_PERSON`.
+- Sentence-level inference plus document-level reconciliation is more accurate for judgment text.
 
-## 📦 Installation
+The OpenNyAI/InLegalNER model is preferred when available. The app remains usable without it.
 
-### 1. Clone the Repository
-```bash
-git clone [https://github.com/yourusername/indian-kanoon-safeview.git](https://github.com/yourusername/indian-kanoon-safeview.git)
-cd indian-kanoon-safeview
-
-```
-
-### 2. Install Dependencies
+## Setup
 
 ```bash
+python3 -m venv .venv
+source .venv/bin/activate
 pip install -r requirements.txt
-
+python -m spacy download en_core_web_sm
 ```
 
-### 3. Download NLP Model
-
-The context engine requires a robust English model to understand relationships in text.
+Create local environment config:
 
 ```bash
-python -m spacy download en_core_web_lg
-
+cp .env.example .env
 ```
 
-*(Note: This download is approx 800MB. If it times out, try running it again.)*
+Set `INDIAN_KANOON_API_TOKEN` in your shell or deployment environment. If you use `.env`, export it before running the app.
 
----
+Optional legal NER model:
 
-## ⚙️ Configuration
-
-1. Open `config.py` in your code editor.
-2. Add your API token:
-
-```python
-# config.py
-API_TOKEN = "YOUR_ACTUAL_TOKEN_HERE" 
-BASE_URL = "[https://api.indiankanoon.org](https://api.indiankanoon.org)"
-
+```bash
+pip install https://huggingface.co/opennyaiorg/en_legal_ner_sm/resolve/main/en_legal_ner_sm-any-py3-none-any.whl
+export LEGAL_NER_MODEL=en_legal_ner_sm
 ```
 
-**⚠️ Security Warning:** Add `config.py` to your `.gitignore` file to prevent leaking your API key.
+The transformer model `en_legal_ner_trf` is more accurate but is tied to older spaCy 3.2.x packaging. Use it only in a compatible environment.
 
----
-
-## 🏃‍♂️ Usage
-
-This project runs as a local web server.
-
-### 1. Start the Server
-
-Run the following command in your terminal:
+## Run
 
 ```bash
 uvicorn app:app --reload
-
 ```
 
-### 2. Open the Interface
+Open `http://127.0.0.1:8000`.
 
-Open your web browser and navigate to:
-👉 **https://www.google.com/search?q=http://127.0.0.1:8000**
+Health check:
 
-### 3. How to Use
+```bash
+curl http://127.0.0.1:8000/health
+```
 
-1. Enter a search term (e.g., *"dowry harassment"*, *"cyber crime"*).
-2. Click **Search** to fetch real cases from Indian Kanoon.
-3. Click on any document title from the results.
-4. View the **Split-Screen Mode**:
-* **Left**: Original Document
-* **Right**: Safe Document (Victims & Family masked)
+The health response reports whether the Indian Kanoon client and the legal NER model are available.
 
-
-
----
-
-## 📂 Project Structure
+## Project Structure
 
 ```text
-indian-kanoon-safeview/
-│
-├── app.py              # 🚀 The Web Server (FastAPI) & Routes
-├── kanoon_client.py    # 🔌 Connects to Indian Kanoon API
-├── masking_engine.py   # 🧠 The "Smart" Logic (Context-Aware Filtering)
-├── config.py           # 🔑 API Credentials
-├── requirements.txt    # 📦 Python Dependencies
-├── README.md           # 📄 This file
-└── templates/
-    └── index.html      # 🎨 The User Interface (HTML/CSS)
-
+app.py              FastAPI routes and safe rendering helpers
+kanoon_client.py    Indian Kanoon API client
+masking_engine.py   Legal-aware redaction engine
+config.py           Environment-based configuration
+templates/          Web UI
+static/             UI assets
 ```
 
----
+## Notes
 
-## 🧠 How the Logic Works
-
-The `masking_engine.py` does not just blindly mask every name. It follows this logic:
-
-1. **Entity Detection**: Finds all People, Phones, Emails, and Locations.
-2. **Context Check**: For every person found, it checks the surrounding words (50 characters before/after).
-3. **Keyword Matching**: It looks for sensitive triggers like:
-* *"victim", "deceased", "minor", "survivor"*
-* *"wife of", "son of", "daughter of"*
-
-
-4. **Decision**:
-* If a trigger is found → **MASK** as `[VICTIM/FAMILY]`
-* If no trigger is found → **KEEP** (Likely a Judge, Lawyer, or Accused)
-
-
-5. **Always Mask**: Phone numbers, Emails, and Addresses are always masked for safety.
-
----
-
-## 📄 License
-
-This project is licensed under the MIT License.
-
----
-
-## 🙏 Acknowledgments
-
-* **Indian Kanoon** for the API.
-* **Microsoft Presidio** for the PII framework.
-* **FastAPI** for the high-performance web framework.
-
-```
-
-```
+Automated redaction should be reviewed before publication. The app is optimized for Indian legal text, but no NER model or rule set can guarantee perfect anonymization.
