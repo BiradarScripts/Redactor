@@ -1,0 +1,31 @@
+model:
+  model: mcn
+  d_model: 256
+  d_signal: 128
+  n_cells: 32
+  n_seed_cells: 6
+  n_dev_steps: 8
+  n_exec_steps: 2
+  op_temperature: 1.0
+  hard_ops: false
+  min_active_gate: 0.02
+  use_cgb: false
+  clifford_p: 3
+  max_seq_len: 96
+
+training:
+  batch_size: 64
+  lr: 0.0003
+  epochs: 100
+  seed: 7
+  device: cpu
+
+data:
+  task: binding
+  eval_items: 0
+  prediction_items: 64
+
+logging:
+  output_dir: runs/mcn_synthetic
+  run_name: mcn-cogs-proxy
+  graph_edge_threshold: 0.15

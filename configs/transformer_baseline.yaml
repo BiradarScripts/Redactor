@@ -1,0 +1,25 @@
+model:
+  model: transformer
+  d_model: 256
+  n_cells: 32
+  n_seed_cells: 6
+  n_dev_steps: 8
+  n_exec_steps: 2
+  max_seq_len: 64
+
+training:
+  batch_size: 64
+  lr: 0.0003
+  epochs: 100
+  seed: 7
+  device: cpu
+
+data:
+  split: jump
+  random_test_fraction: 0.2
+  eval_items: 0
+  prediction_items: 64
+
+logging:
+  output_dir: runs/mcn_toy
+  run_name: transformer-baseline

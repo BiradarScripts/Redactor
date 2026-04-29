@@ -76,7 +76,28 @@ masking_engine.py   Legal-aware redaction engine
 config.py           Environment-based configuration
 templates/          Web UI
 static/             UI assets
+mcn/                MCN research prototype
+docs/mcn.md         MCN prototype notes and commands
 ```
+
+## MCN Research Prototype
+
+The repository also contains a standalone Morphogenic Computation Network prototype based on the MCN/CGB research direction. It is separate from the redactor web app and uses optional ML dependencies.
+
+```bash
+pip install -r requirements-mcn.txt
+python scripts/train_mcn_toy.py --epochs 2 --n-cells 16 --n-seed-cells 4
+python scripts/train_mcn_toy.py --epochs 2 --use-cgb
+python scripts/train_mcn_toy.py --model transformer --epochs 2
+python scripts/train_mcn_toy.py --model universal --epochs 2
+python scripts/train_mcn_toy.py --disable-pruning --epochs 2
+python scripts/run_mcn_config.py configs/mcn_scan.yaml --epochs 2 --d-model 64
+python scripts/run_mcn_suite.py --epochs 30 --eval-items 0 --include-baselines --include-ablations --run-name final-suite
+python scripts/run_mcn_suite.py --split random --epochs 30 --eval-items 0 --run-name sanity-suite
+python scripts/run_mcn_roadmap.py --epochs 12 --run-name final-roadmap
+```
+
+Single runs write reproducible artifacts to `runs/mcn_toy/`; suite runs write comparable artifacts to `runs/mcn_suite/`; the roadmap suite writes a full local-scale coverage report to `runs/mcn_roadmap/`. Each MCN run includes `config.json`, `config.yaml`, CSV curves, `history.jsonl`, `predictions.jsonl`, `compute_profile.json`, `summary.json`, `checkpoint_best.pt`, `checkpoint_last.pt`, Graphviz DOT exports, and PNG visualizations under `graphs/` and `plots/`. See `docs/mcn.md` for the architecture notes, exposed metrics, baselines, ablations, and roadmap benchmark details.
 
 ## Notes
 
