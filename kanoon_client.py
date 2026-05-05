@@ -1,8 +1,9 @@
-import requests
 import config
+import requests
+
 
 class KanoonClient:
-    def __init__(self):
+    def __init__(self, session=None):
         if not config.API_TOKEN:
             raise RuntimeError(
                 "Missing INDIAN_KANOON_API_TOKEN. Set it in the environment before searching Indian Kanoon."
@@ -13,44 +14,109 @@ class KanoonClient:
             "Accept": "application/json"
         }
         self.timeout = config.REQUEST_TIMEOUT
+        self.search_max_pages = config.SEARCH_MAX_PAGES
+        self.session = session or requests.Session()
 
-    def search_documents(self, query, doc_type='all'):
+    @staticmethod
+    def _response_detail(resp):
+        try:
+            payload = resp.json()
+            if isinstance(payload, dict):
+                return payload.get("errmsg") or payload.get("detail") or str(payload)
+        except ValueError:
+            pass
+
+        return (getattr(resp, "text", "") or getattr(resp, "reason", "") or "unknown error").strip()
+
+    @staticmethod
+    def _coerce_total(value, fallback):
+        try:
+            return int(value)
+        except (TypeError, ValueError):
+            return fallback
+
+    @staticmethod
+    def _normalize_search_doc(doc):
+        if not isinstance(doc, dict):
+            return None
+
+        tid = doc.get("tid") or doc.get("docid") or doc.get("id")
+        if tid is None:
+            return None
+
+        return {
+            **doc,
+            "tid": tid,
+            "title": doc.get("title") or doc.get("doc_title") or f"Document {tid}",
+            "headline": doc.get("headline") or doc.get("fragment") or "",
+        }
+
+    def _request_json(self, path, params=None):
+        resp = self.session.post(
+            f"{self.base_url}{path}",
+            headers=self.headers,
+            params=params,
+            timeout=self.timeout,
+        )
+
+        try:
+            resp.raise_for_status()
+        except requests.HTTPError as exc:
+            detail = self._response_detail(resp)
+            raise RuntimeError(
+                f"Indian Kanoon API request failed ({resp.status_code}): {detail}"
+            ) from exc
+
+        try:
+            data = resp.json()
+        except ValueError as exc:
+            raise RuntimeError("Indian Kanoon API returned invalid JSON") from exc
+
+        if isinstance(data, dict) and data.get("errmsg"):
+            raise RuntimeError(f"Indian Kanoon API error: {data['errmsg']}")
+
+        return data
+
+    def search_documents(self, query, doc_type='all', pagenum=0, maxpages=None):
         """
-        Search for documents. 
+        Search for documents.
         doc_type: filter by type - 'judgments', 'acts', 'rules', 'all' (default is 'all')
         """
-        try:
-            # Use POST request with data as per API
-            resp = requests.post(
-                f"{self.base_url}/search/",
-                headers=self.headers,
-                data={"formInput": query},
-                timeout=self.timeout,
-            )
-            
-            if resp.status_code == 200:
-                data = resp.json()
-                docs = data.get('docs', [])
-                
-                # Filter based on doc_type
-                if doc_type == 'judgments':
-                    docs = [doc for doc in docs if doc.get('doctype') == 1000]
-                elif doc_type == 'acts':
-                    docs = [doc for doc in docs if doc.get('doctype') != 1000]
-                # 'all' returns everything (no filtering)
-                
-                return {'docs': docs, 'total': len(docs)}
-            else:
-                print(f"API returned status: {resp.status_code}")
-                return {'docs': [], 'total': 0}
-        except Exception as e:
-            print(f"Search error: {e}")
-            return {'docs': [], 'total': 0}
+        clean_query = " ".join((query or "").split())
+        if not clean_query:
+            return {'docs': [], 'total': 0, 'found': 0}
+
+        maxpages = self.search_max_pages if maxpages is None else maxpages
+        data = self._request_json(
+            "/search/",
+            params={"formInput": clean_query, "pagenum": pagenum, "maxpages": maxpages},
+        )
+        if not isinstance(data, dict):
+            raise RuntimeError("Indian Kanoon API returned an unexpected search response")
+
+        raw_docs = data.get('docs') or []
+        if not isinstance(raw_docs, list):
+            raise RuntimeError("Indian Kanoon API returned an unexpected docs payload")
+
+        docs = [doc for doc in (self._normalize_search_doc(doc) for doc in raw_docs) if doc]
+
+        # Filter based on doc_type.
+        if doc_type == 'judgments':
+            docs = [doc for doc in docs if str(doc.get('doctype')) == "1000"]
+        elif doc_type in {'acts', 'rules'}:
+            docs = [doc for doc in docs if str(doc.get('doctype')) != "1000"]
+        elif doc_type != 'all':
+            raise ValueError(f"Unsupported document type: {doc_type}")
+
+        return {
+            'docs': docs,
+            'total': self._coerce_total(data.get('found'), len(docs)),
+            'found': data.get('found'),
+            'pagenum': pagenum,
+        }
 
     def get_document(self, doc_id):
-        try:
-            resp = requests.post(f"{self.base_url}/doc/{doc_id}/", headers=self.headers, timeout=self.timeout)
-            return resp.json() if resp.status_code == 200 else {}
-        except Exception as e:
-            print(f"Get document error: {e}")
-            return {}
+        data = self._request_json(f"/doc/{int(doc_id)}/")
+        if not isinstance(data, dict):
+            raise RuntimeError("Indian Kanoon API returned an unexpected document response")
+        return data

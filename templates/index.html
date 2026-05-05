@@ -479,6 +479,31 @@
             line-height: 1.5;
         }
 
+        .results-meta {
+            color: rgba(255, 255, 255, 0.6);
+            font-size: 14px;
+            margin: -18px 0 28px;
+        }
+
+        .notice {
+            border-radius: 12px;
+            padding: 16px 18px;
+            margin-bottom: 22px;
+            color: #fff;
+            background: rgba(239, 68, 68, 0.16);
+            border: 1px solid rgba(239, 68, 68, 0.35);
+            line-height: 1.5;
+        }
+
+        .empty-state {
+            color: rgba(255, 255, 255, 0.66);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 16px;
+            padding: 28px;
+            background: rgba(255, 255, 255, 0.04);
+            line-height: 1.6;
+        }
+
         /* Comparison Panels */
         .comparison-panels {
             display: grid;
@@ -866,8 +891,18 @@
         </div>
         
         <div class="page-content">
-            <h2 class="page-title">Found {{ docs|length }} documents</h2>
+            <h2 class="page-title">Search results for "{{ query }}"</h2>
+            {% if total is defined and total > docs|length %}
+            <p class="results-meta">Showing {{ docs|length }} of {{ total }} matching documents</p>
+            {% else %}
+            <p class="results-meta">Found {{ docs|length }} matching documents</p>
+            {% endif %}
+
+            {% if error %}
+            <div class="notice">{{ error }}</div>
+            {% endif %}
             
+            {% if docs %}
             <div class="doc-list">
                 {% for doc in docs %}
                 <a href="/process/{{ doc.tid }}" class="doc-item">
@@ -876,6 +911,9 @@
                 </a>
                 {% endfor %}
             </div>
+            {% elif not error %}
+            <div class="empty-state">No matching documents were returned. Try a broader legal term or a different case phrase.</div>
+            {% endif %}
         </div>
     </div>
 

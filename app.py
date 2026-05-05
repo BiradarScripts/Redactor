@@ -81,16 +81,21 @@ async def search(request: Request, query: str = Form(...)):
         if client is None:
             raise Exception("Client not initialized")
 
+        query = " ".join(query.split())
+        if not query:
+            return render_index(request, docs=[], query=query, total=0, error="Enter a search term.")
+
         results = client.search_documents(query)
         docs = results.get('docs', []) if results else []
+        total = results.get('total', len(docs)) if results else len(docs)
 
-        return render_index(request, docs=docs, query=query)
+        return render_index(request, docs=docs, query=query, total=total)
 
     except Exception as e:
         print(f"❌ Search error: {e}")
         traceback.print_exc()
 
-        return render_index(request, docs=[], query=query, error=str(e))
+        return render_index(request, docs=[], query=query, total=0, error=str(e))
 
 
 # ✅ Process document route
