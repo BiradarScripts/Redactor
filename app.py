@@ -45,6 +45,20 @@ def highlighted_masked_text(text: str) -> str:
     return MASK_TOKEN_RE.sub(r"<mark>\1</mark>", escaped)
 
 
+def get_kanoon_client() -> KanoonClient:
+    global client
+    if client is None:
+        client = KanoonClient()
+    return client
+
+
+def get_smart_masker() -> SmartMasker:
+    global masker
+    if masker is None:
+        masker = SmartMasker()
+    return masker
+
+
 # ✅ Startup initialization (prevents crash)
 @app.on_event("startup")
 async def startup_event():
@@ -78,14 +92,12 @@ async def home(request: Request):
 @app.post("/search", response_class=HTMLResponse)
 async def search(request: Request, query: str = Form(...)):
     try:
-        if client is None:
-            raise Exception("Client not initialized")
-
         query = " ".join(query.split())
         if not query:
             return render_index(request, docs=[], query=query, total=0, error="Enter a search term.")
 
-        results = client.search_documents(query)
+        search_client = get_kanoon_client()
+        results = search_client.search_documents(query)
         docs = results.get('docs', []) if results else []
         total = results.get('total', len(docs)) if results else len(docs)
 
@@ -102,14 +114,14 @@ async def search(request: Request, query: str = Form(...)):
 @app.get("/process/{doc_id}", response_class=HTMLResponse)
 async def process_doc(request: Request, doc_id: int):
     try:
-        if client is None or masker is None:
-            raise Exception("Services not initialized")
+        search_client = get_kanoon_client()
+        smart_masker = get_smart_masker()
 
-        raw_data = client.get_document(doc_id)
+        raw_data = search_client.get_document(doc_id)
         original_text = raw_data.get('doc', 'Error fetching document')
         title = raw_data.get('title', 'Unknown Title')
 
-        masked_text, analysis = masker.mask_victims_and_family(original_text)
+        masked_text, analysis = smart_masker.mask_victims_and_family(original_text)
 
         return render_index(
             request,
@@ -132,9 +144,11 @@ async def process_doc(request: Request, doc_id: int):
 # ✅ Health check route (optional but useful)
 @app.get("/health")
 async def health():
+    search_client = get_kanoon_client()
     return {
         "status": "ok",
         "kanoon_client": client is not None,
+        "search_backend": "api" if search_client.api_enabled else "public",
         "masker": masker is not None,
         "legal_model": masker.legal_model_name if masker else None,
     }
