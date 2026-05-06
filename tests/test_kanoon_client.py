@@ -3,7 +3,7 @@ from unittest.mock import Mock, patch
 
 import requests
 
-from kanoon_client import KanoonClient
+from kanoon_client import DEFAULT_USER_AGENT, KanoonClient
 
 
 class KanoonClientTests(unittest.TestCase):
@@ -32,7 +32,7 @@ class KanoonClientTests(unittest.TestCase):
     def test_search_sends_form_input_as_url_params(self):
         response = self.ok_response(
             {
-                "found": 1,
+                "found": "1 - 10 of 166,253",
                 "docs": [
                     {
                         "tid": 123,
@@ -52,11 +52,12 @@ class KanoonClientTests(unittest.TestCase):
             headers={
                 "Authorization": "Token test-token",
                 "Accept": "application/json",
+                "User-Agent": DEFAULT_USER_AGENT,
             },
             params={"formInput": "dowry harassment", "pagenum": 0, "maxpages": 1},
             timeout=20,
         )
-        self.assertEqual(results["total"], 1)
+        self.assertEqual(results["total"], 166253)
         self.assertEqual(results["docs"][0]["tid"], 123)
 
     def test_search_falls_back_to_public_results_after_api_error(self):
@@ -109,6 +110,7 @@ class KanoonClientTests(unittest.TestCase):
             headers={
                 "Authorization": "Token test-token",
                 "Accept": "application/json",
+                "User-Agent": DEFAULT_USER_AGENT,
             },
             params=None,
             timeout=20,
@@ -151,7 +153,7 @@ class KanoonClientTests(unittest.TestCase):
         session.get.assert_called_once_with(
             "https://indiankanoon.org/search/",
             headers={
-                "User-Agent": "Redactor/1.0 (+https://github.com/BiradarScripts/Redactor)"
+                "User-Agent": DEFAULT_USER_AGENT
             },
             params={"formInput": "rape case", "pagenum": 0},
             timeout=20,
@@ -192,7 +194,7 @@ class KanoonClientTests(unittest.TestCase):
         session.get.assert_called_once_with(
             "https://indiankanoon.org/doc/241889/",
             headers={
-                "User-Agent": "Redactor/1.0 (+https://github.com/BiradarScripts/Redactor)"
+                "User-Agent": DEFAULT_USER_AGENT
             },
             params=None,
             timeout=20,

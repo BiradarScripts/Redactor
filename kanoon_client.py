@@ -18,6 +18,9 @@ def _clean_document_text(value):
     return "\n".join(line for line in lines if line)
 
 
+DEFAULT_USER_AGENT = "Redactor/1.0 (+https://github.com/BiradarScripts/Redactor)"
+
+
 class PublicSearchParser(HTMLParser):
     def __init__(self):
         super().__init__(convert_charrefs=True)
@@ -176,12 +179,13 @@ class KanoonClient:
         self.base_url = config.BASE_URL
         self.public_base_url = config.PUBLIC_BASE_URL
         self.headers = {
-            "Accept": "application/json"
+            "Accept": "application/json",
+            "User-Agent": DEFAULT_USER_AGENT,
         }
         if self.api_enabled:
             self.headers["Authorization"] = f"Token {config.API_TOKEN}"
         self.public_headers = {
-            "User-Agent": "Redactor/1.0 (+https://github.com/BiradarScripts/Redactor)"
+            "User-Agent": DEFAULT_USER_AGENT,
         }
         self.timeout = config.REQUEST_TIMEOUT
         self.search_max_pages = config.SEARCH_MAX_PAGES
@@ -200,6 +204,11 @@ class KanoonClient:
 
     @staticmethod
     def _coerce_total(value, fallback):
+        if isinstance(value, str):
+            match = re.search(r"\bof\s+([\d,]+)", value)
+            if match:
+                return int(match.group(1).replace(",", ""))
+
         try:
             return int(value)
         except (TypeError, ValueError):
