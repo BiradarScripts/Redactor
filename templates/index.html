@@ -547,6 +547,14 @@
             white-space: pre-wrap;
         }
 
+        .sync-block {
+            white-space: pre-wrap;
+        }
+
+        .sync-block + .sync-block {
+            margin-top: 28px;
+        }
+
         .panel-content mark {
             background: rgba(251, 191, 36, 0.3);
             color: #fcd34d;
@@ -745,13 +753,31 @@
                     <div class="panel-header">
                         <h3>Original Document</h3>
                     </div>
-                    <div class="panel-content" id="original-content">{{ original_text }}</div>
+                    <div class="panel-content" id="original-content">
+                        {% if original_blocks is defined %}
+                            {% for block in original_blocks %}
+                            <div class="sync-block" data-block-index="{{ loop.index0 }}">{{ block }}</div>
+                            {% endfor %}
+                        {% else %}
+                            {{ original_text }}
+                        {% endif %}
+                    </div>
                 </div>
                 <div class="panel">
                     <div class="panel-header safe">
                         <h3>Safe/Masked Version</h3>
                     </div>
-                    <div class="panel-content" id="masked-content">{% if masked_html is defined %}{{ masked_html | safe }}{% else %}{{ masked_text }}{% endif %}</div>
+                    <div class="panel-content" id="masked-content">
+                        {% if masked_blocks is defined %}
+                            {% for block in masked_blocks %}
+                            <div class="sync-block" data-block-index="{{ loop.index0 }}">{{ block | safe }}</div>
+                            {% endfor %}
+                        {% elif masked_html is defined %}
+                            {{ masked_html | safe }}
+                        {% else %}
+                            {{ masked_text }}
+                        {% endif %}
+                    </div>
                 </div>
             </div>
         </div>
@@ -855,26 +881,68 @@
         const maskedContent = document.getElementById('masked-content');
         
         if (originalContent && maskedContent) {
-            let isScrolling = false;
-            
-            originalContent.addEventListener('scroll', function() {
-                if (!isScrolling) {
-                    isScrolling = true;
-                    const scrollPercentage = this.scrollTop / (this.scrollHeight - this.clientHeight);
-                    maskedContent.scrollTop = scrollPercentage * (maskedContent.scrollHeight - maskedContent.clientHeight);
-                    setTimeout(() => isScrolling = false, 50);
+            let isSyncing = false;
+
+            function normalizedBlockTops(blocks) {
+                const firstTop = blocks.length ? blocks[0].offsetTop : 0;
+                return blocks.map(block => block.offsetTop - firstTop);
+            }
+
+            function syncScroll(source, target) {
+                const sourceBlocks = Array.from(source.querySelectorAll('.sync-block'));
+                const targetBlocks = Array.from(target.querySelectorAll('.sync-block'));
+                const sourceMax = Math.max(0, source.scrollHeight - source.clientHeight);
+                const targetMax = Math.max(0, target.scrollHeight - target.clientHeight);
+
+                if (!sourceBlocks.length || !targetBlocks.length) {
+                    target.scrollTop = sourceMax > 0 ? (source.scrollTop / sourceMax) * targetMax : 0;
+                    return;
+                }
+
+                const sourceTops = normalizedBlockTops(sourceBlocks);
+                const targetTops = normalizedBlockTops(targetBlocks);
+                let index = 0;
+
+                for (let i = 0; i < sourceTops.length; i++) {
+                    if (sourceTops[i] <= source.scrollTop + 1) {
+                        index = i;
+                    } else {
+                        break;
+                    }
+                }
+
+                const targetIndex = Math.min(index, targetBlocks.length - 1);
+                const sourceCurrentTop = Math.min(sourceMax, sourceTops[index]);
+                const targetCurrentTop = Math.min(targetMax, targetTops[targetIndex]);
+                const sourceNextTop = Math.min(sourceMax, sourceTops[index + 1] ?? sourceMax);
+                const targetNextTop = Math.min(targetMax, targetTops[targetIndex + 1] ?? targetMax);
+                const sourceSpan = Math.max(1, sourceNextTop - sourceCurrentTop);
+                const targetSpan = Math.max(1, targetNextTop - targetCurrentTop);
+                const localProgress = Math.min(1, Math.max(0, (source.scrollTop - sourceCurrentTop) / sourceSpan));
+
+                target.scrollTop = targetCurrentTop + (localProgress * targetSpan);
+            }
+
+            function bindScroll(source, target) {
+                source.addEventListener('scroll', function() {
+                    if (isSyncing) return;
+
+                    isSyncing = true;
+                    syncScroll(source, target);
+                    requestAnimationFrame(function() {
+                        isSyncing = false;
+                    });
+                });
+            }
+
+            bindScroll(originalContent, maskedContent);
+            bindScroll(maskedContent, originalContent);
+
+            window.addEventListener('resize', function() {
+                if (!isSyncing) {
+                    syncScroll(originalContent, maskedContent);
                 }
             });
-            
-            maskedContent.addEventListener('scroll', function() {
-                if (!isScrolling) {
-                    isScrolling = true;
-                    const scrollPercentage = this.scrollTop / (this.scrollHeight - this.clientHeight);
-                    originalContent.scrollTop = scrollPercentage * (originalContent.scrollHeight - originalContent.clientHeight);
-                    setTimeout(() => isScrolling = false, 50);
-                }
-            });
-            
         }
     </script>
 

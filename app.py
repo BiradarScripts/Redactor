@@ -30,6 +30,10 @@ masker = None
 MASK_TOKEN_RE = re.compile(
     r"(\[(?:PROTECTED_PERSON_\d+|VICTIM/FAMILY_\d+|PHONE|EMAIL|LOC|ID)\])"
 )
+DOCUMENT_BLOCK_BOUNDARY_RE = re.compile(
+    r"(?:(?<=</blockquote>)|(?<=</p>)|(?<=</pre>)|\n\s*\n+)",
+    re.IGNORECASE,
+)
 
 
 def render_index(request: Request, **context):
@@ -43,6 +47,19 @@ def render_index(request: Request, **context):
 def highlighted_masked_text(text: str) -> str:
     escaped = html.escape(text or "")
     return MASK_TOKEN_RE.sub(r"<mark>\1</mark>", escaped)
+
+
+def document_blocks(text: str) -> list[str]:
+    blocks = []
+    for block in DOCUMENT_BLOCK_BOUNDARY_RE.split(text or ""):
+        cleaned = block.strip()
+        if cleaned:
+            blocks.append(cleaned)
+    return blocks or [text or ""]
+
+
+def highlighted_masked_blocks(text: str) -> list[str]:
+    return [highlighted_masked_text(block) for block in document_blocks(text)]
 
 
 def get_kanoon_client() -> KanoonClient:
@@ -130,6 +147,8 @@ async def process_doc(request: Request, doc_id: int):
             original_text=original_text,
             masked_text=masked_text,
             masked_html=highlighted_masked_text(masked_text),
+            original_blocks=document_blocks(original_text),
+            masked_blocks=highlighted_masked_blocks(masked_text),
             view_mode="compare",
             analysis=analysis,
         )
