@@ -57,7 +57,9 @@ class RenderingTests(unittest.TestCase):
         self.assertEqual(fake_client.query, "dowry harassment")
         self.assertIn('Search results for "dowry harassment"', response.text)
         self.assertIn("Showing 1 of 9 matching documents", response.text)
-        self.assertIn("/process/321", response.text)
+        self.assertIn('href="/process/321"', response.text)
+        self.assertIn("data-loading-link", response.text)
+        self.assertIn("showDocumentLoader", response.text)
 
     def test_process_route_renders_synced_compare_blocks(self):
         class FakeKanoonClient:
