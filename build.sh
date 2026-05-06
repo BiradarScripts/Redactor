@@ -1,3 +1,5 @@
 #!/bin/bash
-# Install spaCy model - using smaller model for faster deployment
-python -m spacy download en_core_web_sm
+set -e
+
+# The Render free instance has a 512 MB memory limit. The app uses the
+# lightweight rules-only masker by default, so there is no model download here.

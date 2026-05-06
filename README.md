@@ -2,7 +2,7 @@
 
 A FastAPI web app for searching Indian Kanoon judgments and producing a privacy-preserving version of the text.
 
-The masking engine is designed around Indian court judgment structure. It can use OpenNyAI/InLegalNER when a legal spaCy model is installed, and otherwise falls back to Presidio, spaCy, and legal-domain rules for provisions, statutes, precedents, and sensitive-person context.
+The masking engine is designed around Indian court judgment structure. It uses memory-safe legal-domain rules by default, and can optionally use spaCy/Presidio/OpenNyAI models on larger instances.
 
 ## What It Protects
 
@@ -32,7 +32,6 @@ The OpenNyAI/InLegalNER model is preferred when available. The app remains usabl
 python3 -m venv .venv
 source .venv/bin/activate
 pip install -r requirements.txt
-python -m spacy download en_core_web_sm
 ```
 
 Create local environment config:
@@ -43,10 +42,13 @@ cp .env.example .env
 
 Set `INDIAN_KANOON_API_TOKEN` in your shell or deployment environment. If you use `.env`, export it before running the app.
 
-Optional legal NER model:
+Optional heavy NLP mode for larger instances:
 
 ```bash
+pip install presidio-analyzer presidio-anonymizer spacy
+python -m spacy download en_core_web_sm
 pip install https://huggingface.co/opennyaiorg/en_legal_ner_sm/resolve/main/en_legal_ner_sm-any-py3-none-any.whl
+export ENABLE_HEAVY_NLP=1
 export LEGAL_NER_MODEL=en_legal_ner_sm
 ```
 

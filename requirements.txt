@@ -2,7 +2,5 @@ fastapi
 uvicorn
 jinja2
 requests
-presidio-analyzer
-presidio-anonymizer
-spacy
+httpx
 python-multipart

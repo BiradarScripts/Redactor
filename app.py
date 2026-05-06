@@ -76,10 +76,9 @@ def get_smart_masker() -> SmartMasker:
     return masker
 
 
-# ✅ Startup initialization (prevents crash)
 @app.on_event("startup")
 async def startup_event():
-    global client, masker
+    global client
     try:
         print("Starting initialization...")
 
@@ -88,14 +87,6 @@ async def startup_event():
 
     except Exception as e:
         print("KanoonClient unavailable:", e)
-        traceback.print_exc()
-
-    try:
-        masker = SmartMasker()
-        print(f"SmartMasker initialized with model: {masker.legal_model_name}")
-
-    except Exception as e:
-        print("SmartMasker initialization failed:", e)
         traceback.print_exc()
 
 
@@ -168,8 +159,8 @@ async def health():
         "status": "ok",
         "kanoon_client": client is not None,
         "search_backend": "api" if search_client.api_enabled else "public",
-        "masker": masker is not None,
-        "legal_model": masker.legal_model_name if masker else None,
+        "masker": True,
+        "legal_model": masker.legal_model_name if masker else "rules_only_lazy",
     }
 
 

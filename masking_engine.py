@@ -7,13 +7,10 @@ from collections import Counter
 from dataclasses import dataclass
 from typing import Iterable
 
-import spacy
-from presidio_analyzer import AnalyzerEngine
-from presidio_analyzer.nlp_engine import SpacyNlpEngine
-
 
 LOGGER = logging.getLogger(__name__)
 
+ENABLE_HEAVY_NLP = os.getenv("ENABLE_HEAVY_NLP", "0") == "1"
 DEFAULT_SPACY_MODEL = os.getenv("SPACY_MODEL", "en_core_web_sm")
 LEGAL_MODEL_CANDIDATES = (
     os.getenv("LEGAL_NER_MODEL", "").strip(),
@@ -143,6 +140,11 @@ FAMILY_MEMBER_NAME_RE = re.compile(
     rf"\.?\s+(?:of\s+)?({PERSON_NAME_PATTERN})"
 )
 
+FAMILY_SECOND_MEMBER_NAME_RE = re.compile(
+    rf"\b(?i:(?:{RELATION_PATTERN}))\.?\s+(?:of\s+)?"
+    rf"{PERSON_NAME_PATTERN}\s+(?:and|&)\s+({PERSON_NAME_PATTERN})"
+)
+
 RELATION_ALIAS_NAME_RE = re.compile(
     rf"\b(?i:(?:s/o|d/o|w/o|c/o|son\s+of|daughter\s+of|wife\s+of|husband\s+of|"
     rf"father\s+of|mother\s+of|brother\s+of|sister\s+of|guardian\s+of))"
@@ -190,6 +192,7 @@ PRECEDENT_RE = re.compile(
 )
 
 INDIAN_IDENTIFIER_PATTERNS = (
+    ("EMAIL_ADDRESS", re.compile(r"\b[A-Za-z0-9._%+-]+@[A-Za-z0-9.-]+\.[A-Za-z]{2,}\b")),
     ("IN_AADHAAR", re.compile(r"(?<!\d)(?:\d{4}[\s-]?){2}\d{4}(?!\d)")),
     ("IN_PAN", re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")),
     ("IN_VOTER", re.compile(r"\b[A-Z]{3}\d{7}\b")),
@@ -199,6 +202,17 @@ INDIAN_IDENTIFIER_PATTERNS = (
 ADDRESS_RE = re.compile(
     r"\b(?i:(?:r/o|resident\s+of|residing\s+at|living\s+at|address(?:ed)?\s+at|"
     r"native\s+of|of\s+village|from\s+village))\.?\s+([^.;\n]{3,120})"
+)
+
+COMMON_LOCATION_RE = re.compile(
+    r"\b(?:New\s+Delhi|Delhi|Mumbai|Bombay|Bengaluru|Bangalore|Chennai|Madras|Kolkata|"
+    r"Calcutta|Hyderabad|Pune|Ahmedabad|Jaipur|Lucknow|Kanpur|Nagpur|Indore|Bhopal|"
+    r"Patna|Ranchi|Cuttack|Kochi|Ernakulam|Thiruvananthapuram|Trivandrum|Kozhikode|"
+    r"Hosur|Coimbatore|Madurai|Tiruchirappalli|Salem|Mysuru|Mysore|Mangalore|"
+    r"Kerala|Tamil\s+Nadu|Karnataka|Maharashtra|Gujarat|Rajasthan|Punjab|Haryana|"
+    r"Uttar\s+Pradesh|Madhya\s+Pradesh|West\s+Bengal|Bihar|Odisha|Orissa|Jharkhand|"
+    r"Assam|Goa|Telangana|Andhra\s+Pradesh|Chhattisgarh|Uttarakhand|Himachal\s+Pradesh)\b",
+    re.IGNORECASE,
 )
 
 PROCEDURAL_LABEL_RE = re.compile(
@@ -268,18 +282,14 @@ class EntitySpan:
         return self.end - self.start
 
 
-class LoadedSpacyNlpEngine(SpacyNlpEngine):
-    def __init__(self, loaded_spacy_model):
-        super().__init__()
-        self.nlp = {"en": loaded_spacy_model}
-
-
 def _download_spacy_model(model_name: str) -> None:
     python = os.path.join(os.path.dirname(sys.executable), "python")
     subprocess.run([python, "-m", "spacy", "download", model_name], check=True)
 
 
 def _load_spacy_model(model_name: str):
+    import spacy
+
     try:
         return spacy.load(model_name)
     except OSError:
@@ -291,6 +301,9 @@ def _load_spacy_model(model_name: str):
 
 
 def _load_optional_legal_model():
+    if not ENABLE_HEAVY_NLP:
+        return None, "rules_only"
+
     for model_name in LEGAL_MODEL_CANDIDATES:
         if not model_name:
             continue
@@ -301,6 +314,21 @@ def _load_optional_legal_model():
         except Exception as exc:
             LOGGER.info("Legal NER model %s unavailable: %s", model_name, exc)
     return None, "presidio_spacy_fallback"
+
+
+def _create_presidio_analyzer(loaded_spacy_model):
+    if not ENABLE_HEAVY_NLP or loaded_spacy_model is None:
+        return None
+
+    from presidio_analyzer import AnalyzerEngine
+    from presidio_analyzer.nlp_engine import SpacyNlpEngine
+
+    class LoadedSpacyNlpEngine(SpacyNlpEngine):
+        def __init__(self, model):
+            super().__init__()
+            self.nlp = {"en": model}
+
+    return AnalyzerEngine(nlp_engine=LoadedSpacyNlpEngine(loaded_spacy_model))
 
 
 def normalize_name(value: str) -> str:
@@ -330,9 +358,9 @@ def split_preamble_and_body(text: str) -> tuple[str, str, int]:
 
 class SmartMasker:
     def __init__(self):
-        self.generic_nlp = _load_spacy_model(DEFAULT_SPACY_MODEL)
+        self.generic_nlp = _load_spacy_model(DEFAULT_SPACY_MODEL) if ENABLE_HEAVY_NLP else None
         self.legal_nlp, self.legal_model_name = _load_optional_legal_model()
-        self.analyzer = AnalyzerEngine(nlp_engine=LoadedSpacyNlpEngine(self.generic_nlp))
+        self.analyzer = _create_presidio_analyzer(self.generic_nlp)
         self.name_mapping: dict[str, str] = {}
 
     def reset_mapping(self):
@@ -386,6 +414,9 @@ class SmartMasker:
         return True
 
     def _supported_presidio_entities(self) -> list[str]:
+        if self.analyzer is None:
+            return []
+
         requested = {
             "PERSON",
             "LOCATION",
@@ -395,6 +426,9 @@ class SmartMasker:
         return sorted(requested & supported)
 
     def _presidio_spans(self, text: str) -> list[EntitySpan]:
+        if self.analyzer is None:
+            return []
+
         spans: list[EntitySpan] = []
         for result in self.analyzer.analyze(
             text=text,
@@ -418,6 +452,8 @@ class SmartMasker:
         for label, regex in INDIAN_IDENTIFIER_PATTERNS:
             for match in regex.finditer(text):
                 spans.append(EntitySpan(match.start(), match.end(), label, match.group(), "identifier_rules"))
+        for match in COMMON_LOCATION_RE.finditer(text):
+            spans.append(EntitySpan(match.start(), match.end(), "LOCATION", match.group(), "location_rules"))
         return spans
 
     def _legal_spans_for_doc(self, text: str, offset: int = 0) -> list[EntitySpan]:
@@ -438,7 +474,7 @@ class SmartMasker:
         ]
 
     def _sentence_level_legal_spans(self, body: str, offset: int) -> list[EntitySpan]:
-        if not body.strip() or self.legal_nlp is None:
+        if not body.strip() or self.legal_nlp is None or self.generic_nlp is None:
             return []
 
         spans: list[EntitySpan] = []
@@ -483,6 +519,7 @@ class SmartMasker:
             PERSON_AFTER_SENSITIVE_ROLE_RE,
             PERSON_BEFORE_SENSITIVE_ROLE_RE,
             FAMILY_MEMBER_NAME_RE,
+            FAMILY_SECOND_MEMBER_NAME_RE,
             RELATION_ALIAS_NAME_RE,
             PERSON_WITH_RELATION_ALIAS_RE,
             WITNESS_LABEL_NAME_RE,
