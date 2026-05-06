@@ -7,8 +7,9 @@ The masking engine is designed around Indian court judgment structure. It can us
 ## What It Protects
 
 - Protected people mentioned in sensitive contexts, including victims, survivors, prosecutrix references, witnesses, complainants, informants, minors, and family members.
-- Repeated mentions of a protected name across the same judgment.
-- Phone numbers, email addresses, common Indian identity numbers where Presidio supports them, and locations.
+- Indian judgment relationship patterns such as `S/o`, `D/o`, `W/o`, witness labels like `P.W.7 Name`, and minor/victim phrases like `victim girl Name`.
+- Repeated mentions and longer aliases of a protected name across the same judgment.
+- Phone numbers, email addresses, PAN/Aadhaar/Voter-style identifiers, address phrases, and locations.
 
 ## What It Preserves
 

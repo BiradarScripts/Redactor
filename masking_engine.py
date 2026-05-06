@@ -97,6 +97,7 @@ NUMBERED_PARAGRAPH_RE = re.compile(r"(?m)^\s*(?:\d+\.|\(\d+\))\s+[A-Z]")
 SENSITIVE_PERSON_RE = re.compile(
     r"\b(?:victim|deceased|prosecutrix|survivor|minor|child|girl|boy|"
     r"complainant|informant|witness|pw[-\s]?\d+|cw[-\s]?\d+|"
+    r"p\.?\s*w\.?\s*\d+|c\.?\s*w\.?\s*\d+|d\.?\s*w\.?\s*\d+|"
     r"wife|husband|son|daughter|mother|father|brother|sister|"
     r"guardian|parent|relative|family|widow)\b",
     re.IGNORECASE,
@@ -108,22 +109,59 @@ PUBLIC_ROLE_RE = re.compile(
     re.IGNORECASE,
 )
 
+TITLE_PATTERN = r"(?:(?:Mr|Mrs|Ms|Dr|Smt|Shri|Sri|Kumari|Master)\.?\s+)?"
+NAME_WORD_PATTERN = r"(?:[A-Z]\.|[A-Z][A-Za-z.'@-]+)"
+PERSON_NAME_PATTERN = rf"{TITLE_PATTERN}{NAME_WORD_PATTERN}(?:[ \t]+{NAME_WORD_PATTERN}){{0,5}}"
+SENSITIVE_ROLE_PATTERN = (
+    r"victim|deceased|prosecutrix|survivor|complainant|informant|witness|"
+    r"minor|child|girl|boy|pw[-\s]?\d+|cw[-\s]?\d+|"
+    r"p\.?\s*w\.?\s*\d+|c\.?\s*w\.?\s*\d+|d\.?\s*w\.?\s*\d+"
+)
+RELATION_PATTERN = (
+    r"wife|husband|son|daughter|mother|father|brother|sister|guardian|"
+    r"s/o|d/o|w/o|c/o|son\s+of|daughter\s+of|wife\s+of|husband\s+of|"
+    r"father\s+of|mother\s+of|brother\s+of|sister\s+of|guardian\s+of"
+)
+ROLE_NAME_SEPARATOR_PATTERN = (
+    r"(?:(?i:minor|child|girl|boy|lady|woman|male|female|namely|named|"
+    r"name(?:d)?\s+as|by\s+name|called|identified\s+as)\s+|[:,-]\s*){0,4}"
+)
+
 PERSON_AFTER_SENSITIVE_ROLE_RE = re.compile(
-    r"\b(?:victim|deceased|prosecutrix|survivor|complainant|informant|witness|"
-    r"pw[-\s]?\d+|cw[-\s]?\d+)\s*(?:namely|named|name(?:d)?\s+as|:|-|,)?\s*"
-    r"([A-Z][A-Za-z.'-]+(?:[ \t]+[A-Z][A-Za-z.'-]+){0,4})"
+    rf"\b(?i:(?:{SENSITIVE_ROLE_PATTERN}))\b\s*"
+    rf"{ROLE_NAME_SEPARATOR_PATTERN}"
+    rf"({PERSON_NAME_PATTERN})"
 )
 
 PERSON_BEFORE_SENSITIVE_ROLE_RE = re.compile(
-    r"([A-Z][A-Za-z.'-]+(?:[ \t]+[A-Z][A-Za-z.'-]+){0,4})"
-    r"\s*(?:,|-|\()?\s*(?:victim|deceased|prosecutrix|survivor|minor|"
-    r"complainant|informant|witness)\b",
-    re.IGNORECASE,
+    rf"({PERSON_NAME_PATTERN})"
+    rf"\s*(?:,|-|\()?\s*(?i:(?:{SENSITIVE_ROLE_PATTERN}))\b",
 )
 
 FAMILY_MEMBER_NAME_RE = re.compile(
-    r"\b(?:his|her|the)?\s*(?:wife|husband|son|daughter|mother|father|brother|sister|guardian)"
-    r"\s+(?:of\s+)?([A-Z][A-Za-z.'-]+(?:[ \t]+[A-Z][A-Za-z.'-]+){0,4})"
+    rf"\b(?i:(?:his|her|the|their)\s+)?(?i:(?:{RELATION_PATTERN}))"
+    rf"\.?\s+(?:of\s+)?({PERSON_NAME_PATTERN})"
+)
+
+RELATION_ALIAS_NAME_RE = re.compile(
+    rf"\b(?i:(?:s/o|d/o|w/o|c/o|son\s+of|daughter\s+of|wife\s+of|husband\s+of|"
+    rf"father\s+of|mother\s+of|brother\s+of|sister\s+of|guardian\s+of))"
+    rf"\.?\s+({PERSON_NAME_PATTERN})"
+)
+
+PERSON_WITH_RELATION_ALIAS_RE = re.compile(
+    rf"({PERSON_NAME_PATTERN})\s*,?\s*"
+    rf"(?i:(?:s/o|d/o|w/o|c/o))\.?\s+({PERSON_NAME_PATTERN})"
+)
+
+WITNESS_LABEL_NAME_RE = re.compile(
+    rf"\b(?i:(?:p\.?\s*w\.?|pw|c\.?\s*w\.?|cw|d\.?\s*w\.?|dw))"
+    rf"\s*[-.]?\s*\d+\s+({PERSON_NAME_PATTERN})"
+)
+
+NAMED_PERSON_RE = re.compile(
+    rf"\b(?i:(?:one|named|called|known\s+as|identified\s+as|by\s+name))"
+    rf"\s+({PERSON_NAME_PATTERN})"
 )
 
 STATUTE_RE = re.compile(
@@ -150,6 +188,70 @@ PRECEDENT_RE = re.compile(
     r"\s+(?:v\.?|vs\.?|versus)\s+"
     r"[A-Z][A-Za-z.'@&-]+(?:[ \t]+[A-Z][A-Za-z.'@&-]+){0,6}"
 )
+
+INDIAN_IDENTIFIER_PATTERNS = (
+    ("IN_AADHAAR", re.compile(r"(?<!\d)(?:\d{4}[\s-]?){2}\d{4}(?!\d)")),
+    ("IN_PAN", re.compile(r"\b[A-Z]{5}\d{4}[A-Z]\b")),
+    ("IN_VOTER", re.compile(r"\b[A-Z]{3}\d{7}\b")),
+    ("PHONE_NUMBER", re.compile(r"(?<!\d)(?:\+91[\s-]?)?[6-9]\d{4}[\s-]?\d{5}(?!\d)")),
+)
+
+ADDRESS_RE = re.compile(
+    r"\b(?i:(?:r/o|resident\s+of|residing\s+at|living\s+at|address(?:ed)?\s+at|"
+    r"native\s+of|of\s+village|from\s+village))\.?\s+([^.;\n]{3,120})"
+)
+
+PROCEDURAL_LABEL_RE = re.compile(
+    r"^\s*(?:p\.?\s*w\.?|pw|c\.?\s*w\.?|cw|d\.?\s*w\.?|dw|r\.?\s*d\.?\s*o\.?|"
+    r"a-?\d+|accused|petitioner|respondent)\.?\s*\d*\s*$",
+    re.IGNORECASE,
+)
+
+NON_PRIVATE_NAME_TOKENS = {
+    "act",
+    "article",
+    "bench",
+    "case",
+    "chief",
+    "child",
+    "code",
+    "collector",
+    "commissioner",
+    "complainant",
+    "constitution",
+    "court",
+    "criminal",
+    "deceased",
+    "deputy",
+    "district",
+    "girl",
+    "government",
+    "high",
+    "honble",
+    "hospital",
+    "inspector",
+    "ipc",
+    "informant",
+    "justice",
+    "magistrate",
+    "minor",
+    "order",
+    "penal",
+    "police",
+    "prosecutrix",
+    "prosecutor",
+    "section",
+    "session",
+    "sessions",
+    "state",
+    "station",
+    "sub",
+    "supreme",
+    "survivor",
+    "union",
+    "victim",
+    "witness",
+}
 
 
 @dataclass(frozen=True)
@@ -257,6 +359,32 @@ class SmartMasker:
         after = text[end : min(len(text), end + 30)]
         return bool(PUBLIC_ROLE_RE.search(before) or PUBLIC_ROLE_RE.match(after.strip()))
 
+    def _is_inside_html_tag(self, text: str, start: int) -> bool:
+        last_open = text.rfind("<", 0, start)
+        last_close = text.rfind(">", 0, start)
+        return last_open > last_close
+
+    def _is_procedural_label(self, value: str) -> bool:
+        normalized = normalize_name(value)
+        return bool(PROCEDURAL_LABEL_RE.match(value or "")) or normalized in {"pw", "cw", "dw", "rdo"}
+
+    def _looks_like_private_name(self, value: str) -> bool:
+        normalized = normalize_name(value)
+        if len(normalized) < 3 or self._is_procedural_label(value):
+            return False
+        if any(char.isdigit() for char in normalized):
+            return False
+
+        tokens = normalized.split()
+        meaningful = [token for token in tokens if len(token) > 1]
+        if not meaningful:
+            return False
+        if all(token in NON_PRIVATE_NAME_TOKENS for token in meaningful):
+            return False
+        if normalized in {"the", "this", "that", "said", "court", "state", "union", "india"}:
+            return False
+        return True
+
     def _supported_presidio_entities(self) -> list[str]:
         requested = {
             "PERSON",
@@ -283,6 +411,13 @@ class SmartMasker:
                     score=result.score,
                 )
             )
+        return spans
+
+    def _identifier_rule_spans(self, text: str) -> list[EntitySpan]:
+        spans: list[EntitySpan] = []
+        for label, regex in INDIAN_IDENTIFIER_PATTERNS:
+            for match in regex.finditer(text):
+                spans.append(EntitySpan(match.start(), match.end(), label, match.group(), "identifier_rules"))
         return spans
 
     def _legal_spans_for_doc(self, text: str, offset: int = 0) -> list[EntitySpan]:
@@ -344,13 +479,30 @@ class SmartMasker:
 
     def _rule_spans(self, text: str) -> list[EntitySpan]:
         spans: list[EntitySpan] = []
-        for regex in (PERSON_AFTER_SENSITIVE_ROLE_RE, PERSON_BEFORE_SENSITIVE_ROLE_RE, FAMILY_MEMBER_NAME_RE):
+        person_patterns = (
+            PERSON_AFTER_SENSITIVE_ROLE_RE,
+            PERSON_BEFORE_SENSITIVE_ROLE_RE,
+            FAMILY_MEMBER_NAME_RE,
+            RELATION_ALIAS_NAME_RE,
+            PERSON_WITH_RELATION_ALIAS_RE,
+            WITNESS_LABEL_NAME_RE,
+            NAMED_PERSON_RE,
+        )
+        for regex in person_patterns:
             for match in regex.finditer(text):
-                start, end = match.span(1)
-                value = text[start:end].strip(" .,:;()")
-                normalized = normalize_name(value)
-                if len(normalized) >= 3 and normalized not in {"the", "this", "that", "said", "court"}:
-                    spans.append(EntitySpan(start, end, "SENSITIVE_PERSON", value, "rules"))
+                for index, value in enumerate(match.groups(), start=1):
+                    if not value:
+                        continue
+                    start, end = match.span(index)
+                    value = text[start:end].strip(" .,:;()")
+                    if self._looks_like_private_name(value) and not self._is_inside_html_tag(text, start):
+                        spans.append(EntitySpan(start, end, "SENSITIVE_PERSON", value, "rules"))
+
+        for match in ADDRESS_RE.finditer(text):
+            start, end = match.span(1)
+            value = text[start:end].strip(" .,:;()")
+            if value:
+                spans.append(EntitySpan(start, end, "LOCATION", value, "address_rules"))
         return spans
 
     def _overlapping_legal_labels(self, span: EntitySpan, legal_spans: Iterable[EntitySpan]) -> set[str]:
@@ -361,6 +513,8 @@ class SmartMasker:
         }
 
     def _should_mask_person(self, span: EntitySpan, legal_labels: set[str], text: str, body_start: int) -> bool:
+        if not self._looks_like_private_name(span.text) or self._is_inside_html_tag(text, span.start):
+            return False
         if legal_labels & PUBLIC_LEGAL_LABELS:
             return False
         if "WITNESS" in legal_labels or span.label == "SENSITIVE_PERSON":
@@ -369,14 +523,56 @@ class SmartMasker:
             return False
         return self._is_sensitive_context(text, span.start, span.end, body_start)
 
+    def _expand_person_name_boundaries(self, text: str, spans: list[EntitySpan]) -> list[EntitySpan]:
+        expanded: list[EntitySpan] = []
+        person_labels = {"PERSON", "PETITIONER", "RESPONDENT", "WITNESS", "OTHER_PERSON", "SENSITIVE_PERSON"}
+
+        for span in spans:
+            if span.label not in person_labels:
+                expanded.append(span)
+                continue
+
+            tail = text[span.end : min(len(text), span.end + 100)]
+            match = re.match(rf"(?:[ \t]+{NAME_WORD_PATTERN}){{1,4}}", tail)
+            if not match:
+                expanded.append(span)
+                continue
+
+            candidate_end = span.end + match.end()
+            candidate_text = text[span.start:candidate_end].strip(" .,:;()")
+            candidate_tokens = normalize_name(candidate_text).split()
+            has_role_token = any(token in NON_PRIVATE_NAME_TOKENS for token in candidate_tokens[1:])
+
+            if self._looks_like_private_name(candidate_text) and not has_role_token:
+                expanded.append(
+                    EntitySpan(
+                        span.start,
+                        candidate_end,
+                        span.label,
+                        candidate_text,
+                        span.source,
+                        span.score,
+                    )
+                )
+            else:
+                expanded.append(span)
+
+        return expanded
+
     def _add_document_level_name_mentions(self, text: str, spans: list[EntitySpan]) -> list[EntitySpan]:
         protected_names = {
             span.text
             for span in spans
             if span.label in {"PERSON", "PETITIONER", "RESPONDENT", "WITNESS", "OTHER_PERSON", "SENSITIVE_PERSON"}
-            and len(normalize_name(span.text)) >= 3
+            and self._looks_like_private_name(span.text)
         }
         expanded = list(spans)
+        alias_counts = Counter()
+
+        for name in protected_names:
+            for token in normalize_name(name).split():
+                if len(token) >= 5 and token not in NON_PRIVATE_NAME_TOKENS:
+                    alias_counts[token] += 1
 
         for name in protected_names:
             normalized = normalize_name(name)
@@ -385,11 +581,31 @@ class SmartMasker:
             tokens = re.findall(r"[A-Za-z0-9]+", name)
             if not tokens or (len(tokens) == 1 and len(tokens[0]) < 4):
                 continue
-            pattern = re.compile(r"\b" + r"[\s.,'@-]+".join(map(re.escape, tokens)) + r"\b", re.IGNORECASE)
-            for match in pattern.finditer(text):
-                expanded.append(
-                    EntitySpan(match.start(), match.end(), "PERSON", text[match.start() : match.end()], "document_coref")
-                )
+            patterns = [re.compile(r"\b" + r"[\s.,'@-]+".join(map(re.escape, tokens)) + r"\b", re.IGNORECASE)]
+            if len(tokens) == 1 and len(tokens[0]) >= 5:
+                patterns.append(re.compile(rf"\b(?i:{re.escape(tokens[0])})(?:[ \t]+{NAME_WORD_PATTERN}){{0,4}}\b"))
+            for token in normalize_name(name).split():
+                if alias_counts[token] == 1:
+                    patterns.append(re.compile(rf"\b(?i:{re.escape(token)})(?:[ \t]+{NAME_WORD_PATTERN}){{0,4}}\b"))
+                    patterns.append(re.compile(rf"\b{re.escape(token)}\b", re.IGNORECASE))
+
+            for pattern in patterns:
+                for match in pattern.finditer(text):
+                    value = text[match.start() : match.end()]
+                    if (
+                        self._looks_like_private_name(value)
+                        and not self._is_public_context(text, match.start(), match.end())
+                        and not self._is_inside_html_tag(text, match.start())
+                    ):
+                        expanded.append(
+                            EntitySpan(
+                                match.start(),
+                                match.end(),
+                                "PERSON",
+                                name,
+                                "document_coref",
+                            )
+                        )
         return expanded
 
     def _filter_overlaps(self, spans: Iterable[EntitySpan]) -> list[EntitySpan]:
@@ -414,6 +630,15 @@ class SmartMasker:
             return "[LOC]"
 
         normalized = normalize_name(span.text)
+        for existing_normalized, replacement in list(self.name_mapping.items()):
+            existing_first = existing_normalized.split(" ", 1)[0]
+            if len(existing_first) >= 5 and (
+                normalized.startswith(f"{existing_normalized} ")
+                or existing_normalized.startswith(f"{normalized} ")
+            ):
+                self.name_mapping[normalized] = replacement
+                return replacement
+
         if normalized not in self.name_mapping:
             self.name_mapping[normalized] = f"[PROTECTED_PERSON_{len(self.name_mapping) + 1}]"
         return self.name_mapping[normalized]
@@ -475,10 +700,11 @@ class SmartMasker:
 
         legal_spans, body_start = self._legal_spans(text)
         presidio_spans = self._presidio_spans(text)
+        identifier_spans = self._identifier_rule_spans(text)
         rule_spans = self._rule_spans(text)
 
         spans_to_mask: list[EntitySpan] = []
-        for span in [*presidio_spans, *legal_spans, *rule_spans]:
+        for span in [*presidio_spans, *identifier_spans, *legal_spans, *rule_spans]:
             legal_labels = self._overlapping_legal_labels(span, legal_spans)
 
             if span.label in DIRECT_IDENTIFIER_LABELS:
@@ -489,6 +715,7 @@ class SmartMasker:
                 if self._should_mask_person(span, legal_labels or {span.label}, text, body_start):
                     spans_to_mask.append(span)
 
+        spans_to_mask = self._expand_person_name_boundaries(text, spans_to_mask)
         spans_to_mask = self._add_document_level_name_mentions(text, spans_to_mask)
         spans_to_mask = self._filter_overlaps(spans_to_mask)
         masked_text = self._apply_replacements(text, spans_to_mask)
